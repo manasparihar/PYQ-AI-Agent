@@ -76,11 +76,14 @@ def chat_stream_endpoint(request: Request, chat_req: ChatRequest, session_id: st
         
         logger.info(f"Generating structured PYQ response for session {session_id} (Streaming)")
         
-        # 2. Run the pipeline (synchronously but we will stream the result)
-        # In a fully async system this could be broken down, but we chunk the final string here
-        final_response_text = generate_pyq_response(chat_req.prompt, history)
-        
         async def event_generator():
+            # Send an immediate heartbeat to prevent Render 504 Gateway Timeout
+            yield " "
+            await asyncio.sleep(0.1)
+            
+            # Run the heavy synchronous pipeline in a background thread to not block the event loop
+            final_response_text = await asyncio.to_thread(generate_pyq_response, chat_req.prompt, history)
+            
             # Simulate streaming by yielding chunks of the final string
             chunk_size = 50
             for i in range(0, len(final_response_text), chunk_size):
