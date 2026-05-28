@@ -23,7 +23,8 @@ def add_message_to_session(session_id: str, role: str, content: str) -> dict:
     Appends a message (either 'user' or 'assistant') to an existing session in memory.
     """
     if session_id not in conversation_store:
-        raise ValueError(f"Session ID {session_id} not found.")
+        logger.warning(f"Session ID {session_id} not found. Auto-recreating it to survive server restarts.")
+        conversation_store[session_id] = []
         
     timestamp = datetime.datetime.now().isoformat()
     message = {
@@ -41,7 +42,8 @@ def get_session_history(session_id: str) -> List[dict]:
     Retrieves the complete list of messages for a given session ID.
     """
     if session_id not in conversation_store:
-        raise ValueError(f"Session ID {session_id} not found.")
+        logger.warning(f"Session ID {session_id} not found. Returning empty history to survive server restarts.")
+        conversation_store[session_id] = []
         
     return conversation_store[session_id]
 
