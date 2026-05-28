@@ -37,7 +37,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.FRONTEND_URL] if settings and settings.FRONTEND_URL else ["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"], # Limit methods
+    allow_methods=["GET", "POST", "HEAD", "OPTIONS"], # Limit methods
     allow_headers=["*"],
 )
 
@@ -67,15 +67,17 @@ except Exception as e:
     logger.error(f"Error including routers during startup: {e}")
 
 @app.get("/")
+@app.head("/")
 async def root():
     """
     Root endpoint to verify the API is running.
     """
-    return {"message": "PYQ AI Agent Running", "success": True}
+    return {"message": "API running"}
 
 @app.get("/health")
+@app.head("/health")
 async def health_check():
     """
     Health check endpoint for monitoring the status of the service.
     """
-    return {"status": "healthy", "success": True}
+    return {"status": "healthy"}
