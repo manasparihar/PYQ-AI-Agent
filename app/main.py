@@ -35,7 +35,7 @@ app.add_middleware(PayloadSizeLimitMiddleware)
 # 3. Add Secure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL] if settings and settings.FRONTEND_URL else ["*"],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"] if settings and settings.FRONTEND_URL else ["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "HEAD", "OPTIONS"], # Limit methods
     allow_headers=["*"],

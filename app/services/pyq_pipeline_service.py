@@ -51,9 +51,9 @@ def generate_pyq_response(topic: str, history: list = None) -> str:
     Return a raw JSON array of objects. Do NOT use markdown code blocks.
     Ensure answers are concise, factual, and not long explanations.
     Do not invent fake years or exams. If exact year is unknown, use "Various Exams".
-    Provide exactly 5 to 7 high-quality questions.
+    Provide up to 20 high-quality questions.
     
-    Format EXACTLY like this:
+    Return questions ONLY in this exact JSON array format:
     [
         {{
             "question_text": "Full text of the question including options if MCQ.",
@@ -61,32 +61,76 @@ def generate_pyq_response(topic: str, history: list = None) -> str:
             "answer": "Concise correct answer."
         }}
     ]
+    
+    Do not add introductions. Do not add explanations. Do not add markdown headings.
     """
     
     logger.info("Extracting candidate questions using Gemini...")
     extraction_response = ask_gemini(extraction_prompt)
     if not extraction_response.get("success"):
+        logger.error(f"Gemini API failed: {extraction_response}")
         return "Failed to extract candidate questions. Please try again."
         
     raw_text = extraction_response.get("response", "")
     
-    # Clean JSON format from markdown
-    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+    logger.info("\n===== RAW GEMINI RESPONSE =====")
+    logger.info(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
+    logger.info("================================")
     
-    # Find JSON array boundaries
-    start_idx = raw_text.find('[')
-    end_idx = raw_text.rfind(']') + 1
+    # --- ROBUST EXTRACTION PIPELINE ---
+    candidates = []
+    
+    # 1. Try JSON Parsing First
+    cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
+    start_idx = cleaned_text.find('[')
+    end_idx = cleaned_text.rfind(']') + 1
+    
     if start_idx != -1 and end_idx != 0:
-        raw_text = raw_text[start_idx:end_idx]
-    
-    try:
-        candidates = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Gemini candidate extraction as JSON. Text: {raw_text[:100]}... Error: {e}")
-        return "Failed to process question data. Please try another query."
-        
+        json_str = cleaned_text[start_idx:end_idx]
+        try:
+            candidates = json.loads(json_str)
+            logger.info(f"Successfully extracted {len(candidates)} questions using JSON parser.")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse Gemini candidate extraction as JSON. Error: {e}")
+            
+    # 2. Fallback to Regex if JSON parsing fails or returns empty
     if not candidates:
-        return "No candidate questions could be generated."
+        logger.info("Starting Regex fallback extraction...")
+        # Split text by common question numbers: Q1., 1., Question 1:, etc.
+        question_blocks = re.split(r'(?i)(?:^|\n)(?:Q\d+\.?|\d+\.?|Question\s*\d+\:?)\s+', raw_text)
+        
+        for block in question_blocks:
+            block = block.strip()
+            if not block:
+                continue
+                
+            ans_match = re.search(r'(?i)\n*Answer\s*:\s*(.*)', block, re.DOTALL)
+            if ans_match:
+                question_part = block[:ans_match.start()].strip()
+                answer_part = ans_match.group(1).strip()
+                
+                # Extract exam year if formatted in parentheses at the end
+                exam_match = re.search(r'\(([^)]+)\)$', question_part)
+                exam_year = "Various Exams"
+                if exam_match:
+                    exam_year = exam_match.group(1)
+                    question_text = question_part[:exam_match.start()].strip()
+                else:
+                    question_text = question_part
+                    
+                candidates.append({
+                    "question_text": question_text,
+                    "exam_year": exam_year,
+                    "answer": answer_part
+                })
+                
+        if candidates:
+            logger.info(f"Successfully extracted {len(candidates)} questions using Regex fallback parser.")
+        else:
+            logger.error("Regex parsing also failed to extract any questions.")
+            
+    if not candidates:
+        return "Failed to process question data due to formatting mismatch. Please try another query."
         
     # 3. Classify and Filter
     logger.info(f"Classifying {len(candidates)} candidate questions...")
