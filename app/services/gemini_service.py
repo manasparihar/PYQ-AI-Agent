@@ -22,7 +22,7 @@ def ask_gemini(prompt: str):
             return {"success": False, "error": "Gemini API key is missing. Please check .env file."}
             
         logger.info("Initializing Gemini model instance.")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         logger.info("Sending prompt to Gemini API.")
         response = model.generate_content(prompt)
@@ -54,7 +54,7 @@ def stream_gemini_generator(prompt: str):
         
     try:
         logger.info("Initializing Gemini model instance for streaming.")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         logger.info("Sending prompt to Gemini API with stream=True.")
         response = model.generate_content(prompt, stream=True)
