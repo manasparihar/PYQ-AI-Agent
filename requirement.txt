@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+google-generativeai
+python-dotenv
+requests
+tavily-python
+reportlab
+aiofiles
+python-multipart
+pydantic
