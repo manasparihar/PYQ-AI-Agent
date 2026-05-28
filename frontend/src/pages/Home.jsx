@@ -8,38 +8,60 @@ const Home = () => {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true); // Prevent messaging before session loads
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Initialize session on mount
   useEffect(() => {
-    const initSession = async () => {
+    const initSession = async (retries = 1) => {
+      setIsInitializing(true);
+      setError(null);
+      
       // 1. Try to load from localStorage first
       const storedSessionId = localStorage.getItem('chat_session_id');
       const storedMessages = localStorage.getItem('chat_messages');
       
-      if (storedSessionId && storedMessages) {
+      if (storedSessionId) {
+        console.log("Restoring existing session:", storedSessionId);
         setSessionId(storedSessionId);
         try {
-          setMessages(JSON.parse(storedMessages));
+          if (storedMessages) {
+            setMessages(JSON.parse(storedMessages));
+          }
         } catch(e) {
           setMessages([]);
         }
-        return; // Early return, we restored successfully
+        setIsInitializing(false);
+        return; // Restored successfully
       }
 
       // 2. Otherwise create a new session
+      console.log("Creating new session...");
       try {
         const result = await createSession();
-        if (result.success) {
+        console.log("Session creation response:", result);
+        
+        // Backend returns { "session_id": "..." }
+        if (result && result.session_id) {
           setSessionId(result.session_id);
           localStorage.setItem('chat_session_id', result.session_id);
+          console.log("New session created and stored:", result.session_id);
+        } else {
+          throw new Error("Invalid response format: missing session_id");
         }
       } catch (err) {
         console.error("Failed to create session:", err);
-        setError("Could not connect to backend. Make sure your FastAPI server is running on port 8000.");
+        if (retries > 0) {
+          console.log(`Retrying session creation... (${retries} attempts left)`);
+          return initSession(retries - 1);
+        }
+        setError("Could not connect to backend. Please verify your internet connection and backend status.");
+      } finally {
+        setIsInitializing(false);
       }
     };
+    
     initSession();
   }, []);
 
@@ -55,26 +77,35 @@ const Home = () => {
     localStorage.removeItem('chat_messages');
     setMessages([]);
     setError(null);
-    setIsLoading(true);
+    setIsInitializing(true); // Block input while creating
     
+    console.log("Starting new chat...");
     try {
       const result = await createSession();
-      if (result.success) {
+      console.log("New chat session response:", result);
+      
+      if (result && result.session_id) {
         setSessionId(result.session_id);
         localStorage.setItem('chat_session_id', result.session_id);
+        console.log("New chat session created:", result.session_id);
+      } else {
+        throw new Error("Invalid response format: missing session_id");
       }
     } catch (err) {
-      setError("Failed to start new chat.");
+      console.error("Failed to start new chat:", err);
+      setError("Failed to start new chat. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsInitializing(false);
     }
   };
 
   const handleSendMessage = async (prompt) => {
     if (!sessionId) {
-      setError("No active session. Please refresh the page.");
+      setError("No active session. Please refresh the page to start a new session.");
       return;
     }
+    
+    console.log(`Sending message in session [${sessionId}]:`, prompt);
     
     // Add user message to UI immediately
     const userMsg = { role: 'user', content: prompt };
@@ -101,8 +132,9 @@ const Home = () => {
           return newMessages;
         });
       });
+      console.log("Message stream completed successfully.");
     } catch (err) {
-      console.error("Chat error:", err);
+      console.error("Chat API error:", err);
       setError(err.message || "Failed to communicate with AI.");
     } finally {
       setIsLoading(false);
@@ -147,6 +179,13 @@ const Home = () => {
           </div>
         )}
         
+        {isInitializing && !sessionId && (
+          <div className="bg-blue-500/10 text-blue-400 px-4 py-3 text-center text-sm border-b border-blue-500/20 font-medium z-10 shrink-0 flex items-center justify-center gap-2">
+            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+            Connecting to AI backend...
+          </div>
+        )}
+        
         <div className="flex-1 overflow-y-auto w-full scroll-smooth">
           <ChatWindow 
             messages={messages} 
@@ -156,7 +195,7 @@ const Home = () => {
         </div>
         
         <div className="w-full shrink-0">
-          <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+          <ChatInput onSend={handleSendMessage} isLoading={isLoading || isInitializing} />
         </div>
       </div>
     </div>
