@@ -14,7 +14,7 @@ class PDFRequest(BaseModel):
 
 @router.post("/generate-pdf")
 @limiter.limit("5/minute") # Generating PDFs is resource intensive
-def generate_pdf_endpoint(request_obj: Request, request: PDFRequest):
+def generate_pdf_endpoint(request: Request, pdf_req: PDFRequest):
     """
     Endpoint: Generates a formatted PDF from any provided text content.
     """
@@ -22,11 +22,11 @@ def generate_pdf_endpoint(request_obj: Request, request: PDFRequest):
         logger.info("Received request to generate PDF for specific content")
         
         # 1. Validate input
-        if not request.content or not request.content.strip():
+        if not pdf_req.content or not pdf_req.content.strip():
             raise HTTPException(status_code=400, detail="Content cannot be empty.")
             
         # 2. Generate PDF automatically using the PDF service
-        pdf_path = generate_content_pdf(title=request.title, content=request.content)
+        pdf_path = generate_content_pdf(title=pdf_req.title, content=pdf_req.content)
         
         # 3. Construct public downloadable URL safely for any OS
         filename = os.path.basename(pdf_path)
