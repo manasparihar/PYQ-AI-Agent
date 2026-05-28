@@ -1,10 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
-const api = axios.create({
-  baseURL: API_URL,
-});
+import { api, API_URL } from './api';
 
 /**
  * Calls the FastAPI backend to generate a PDF for specific content.
@@ -26,6 +20,7 @@ export const exportContentToPDF = async (title, content) => {
 
 /**
  * Constructs the full absolute URL for the PDF so the browser can download it.
+ * Uses the environment-based API_URL to support production deployments.
  */
 export const getFullPdfUrl = (pdfUrl) => {
   const cleanUrl = pdfUrl.startsWith('/') ? pdfUrl : `/${pdfUrl}`;

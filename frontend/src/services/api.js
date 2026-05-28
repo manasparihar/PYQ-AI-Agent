@@ -1,18 +1,40 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+// 1. Centralized API Configuration
+// Replace all hardcoded localhost API URLs with environment-based configuration.
+export const API_URL = import.meta.env.VITE_API_URL || '';
 
-const api = axios.create({
+// 2. Fallback console warning if env variable missing
+if (!API_URL) {
+  console.warn("WARNING: VITE_API_URL is missing! Please set it in your environment variables. API calls will likely fail.");
+}
+
+// 3. Configure Axios properly
+export const api = axios.create({
   baseURL: API_URL,
+  timeout: 60000, // 60 seconds timeout
 });
 
+// 4. Add proper error handling for: backend unavailable, network errors, timeout errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        console.error("API Error: Timeout. The backend took too long to respond.");
+      } else {
+        console.error("API Error: Network Error or Backend Unavailable. Please verify the Render backend is live.");
+      }
+    } else {
+      console.error(`API Error [${error.response.status}]:`, error.response.data);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// --- Session APIs ---
 export const createSession = async () => {
   const response = await api.post('/conversation/create-session');
-  return response.data;
-};
-
-export const chatWithAI = async (sessionId, prompt) => {
-  const response = await api.post(`/conversation/chat/${sessionId}`, { prompt });
   return response.data;
 };
 
@@ -21,22 +43,15 @@ export const getSessionHistory = async (sessionId) => {
   return response.data;
 };
 
-export const generatePDF = async (sessionId, downloadOnlyLatest = false) => {
-  const response = await api.post(`/generate-pdf/${sessionId}?download_only_latest=${downloadOnlyLatest}`);
+// --- Chat APIs ---
+export const chatWithAI = async (sessionId, prompt) => {
+  const response = await api.post(`/conversation/chat/${sessionId}`, { prompt });
   return response.data;
-};
-
-export const getPdfDownloadUrl = (pdfPath) => {
-  // Replace Windows backslashes with forward slashes for the URL
-  const path = pdfPath.replace(/\\/g, '/');
-  return `${API_URL}/${path}`;
 };
 
 /**
  * Streams the AI response chunk by chunk using native fetch.
- * @param {string} sessionId 
- * @param {string} prompt 
- * @param {function} onChunk - Callback fired when a new chunk of text arrives
+ * Uses VITE_API_URL to construct the correct backend endpoint.
  */
 export const streamChatWithAI = async (sessionId, prompt, onChunk) => {
   try {
@@ -49,7 +64,6 @@ export const streamChatWithAI = async (sessionId, prompt, onChunk) => {
     });
 
     if (!response.ok) {
-      // Try to parse error from backend if possible
       const errData = await response.json().catch(() => null);
       throw new Error(errData?.detail || `HTTP error! status: ${response.status}`);
     }
@@ -69,7 +83,18 @@ export const streamChatWithAI = async (sessionId, prompt, onChunk) => {
     
     return { success: true };
   } catch (error) {
-    console.error("Streaming error:", error);
+    console.error("Streaming error: Network error or backend unavailable", error);
     throw error;
   }
+};
+
+// --- PDF APIs (legacy, recommend moving fully to pdfService.js) ---
+export const generatePDF = async (sessionId, downloadOnlyLatest = false) => {
+  const response = await api.post(`/generate-pdf/${sessionId}?download_only_latest=${downloadOnlyLatest}`);
+  return response.data;
+};
+
+export const getPdfDownloadUrl = (pdfPath) => {
+  const path = pdfPath.replace(/\\/g, '/');
+  return `${API_URL}/${path}`;
 };
